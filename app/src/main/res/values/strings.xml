@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">WoW Forever</string>
+    <string name="app_name">wowforever-xmfold</string>
     <string name="home">Home</string>
     <string name="download">Download</string>
     <string name="install">Install</string>
@@ -696,4 +696,8 @@
     <string name="gyro_degrees_per_second_value">%1$.1f°/s</string>
     <string name="gyro_milliseconds_value">%1$d ms</string>
     <string name="reset_gyro_settings">Reset gyro settings</string>
+    <string name="game_session_channel_name">Game running</string>
+    <string name="game_session_channel_description">Shown while World of Warcraft is running, so it keeps running when you switch apps.</string>
+    <string name="game_session_notification_title">World of Warcraft is running</string>
+    <string name="game_session_notification_text">Tap to return to the game</string>
 </resources>

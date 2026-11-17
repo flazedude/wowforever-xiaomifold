@@ -32,7 +32,7 @@ import app.gamenative.ui.PluviaMain
 import app.gamenative.ui.enums.Orientation
 import app.gamenative.ui.util.LocalSnackbarHostController
 import app.gamenative.ui.util.SnackbarHostController
-import app.gamenative.utils.LocaleHelper
+import app.gamenative.utils.ChineseAppLocale
 import app.gamenative.ui.util.SnackbarManager
 import com.winlator.core.AppUtils
 import com.winlator.inputcontrols.ControllerManager
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
 
         // Apply the saved language preference before creating the activity
         val languageCode = PrefManager.appLanguage
-        val context = LocaleHelper.applyLanguage(newBase, languageCode)
+        val context = ChineseAppLocale.activityContext(newBase, languageCode)
         super.attachBaseContext(context)
     }
 

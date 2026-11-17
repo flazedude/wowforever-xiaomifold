@@ -1,5 +1,5 @@
 ﻿<resources>
-    <string name="app_name">GameNative</string>
+    <string name="app_name">wowforever-xmfold</string>
     <string name="home">主页</string>
     <string name="download">下载</string>
     <string name="install">安装</string>
@@ -707,4 +707,8 @@
     <string name="gyro_degrees_per_second_value">%1$.1f°/秒</string>
     <string name="gyro_milliseconds_value">%1$d 毫秒</string>
     <string name="reset_gyro_settings">重置陀螺仪设置</string>
+    <string name="game_session_channel_name">游戏运行中</string>
+    <string name="game_session_channel_description">魔兽世界运行期间显示，切换应用时保持游戏连接。</string>
+    <string name="game_session_notification_title">魔兽世界正在运行</string>
+    <string name="game_session_notification_text">点击返回游戏</string>
 </resources>

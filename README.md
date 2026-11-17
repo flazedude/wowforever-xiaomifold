@@ -1,4 +1,43 @@
-# WoW Forever for Android
+# wowforever-xiaomifold
+
+**Original project: [jaredgei/wow-forever-android — WoW Forever for Android](https://github.com/jaredgei/wow-forever-android), created by jaredgei and upstream contributors.**
+
+This public fork adds Xiaomi 18 Fold support and separate international and Chinese editions, based on upstream 2.4.4. The original project's source history, [GPL-3.0 license](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES) are retained. Xiaomi-specific changes are maintained here by [flazedude](https://github.com/flazedude).
+
+Download both editions from this fork's [releases](https://github.com/flazedude/wowforever-xiaomifold/releases).
+
+- International edition: `app.wowforever.xmfold`, launcher name **wowforever-xmfold**. It supports selectable regions and keeps the existing English game defaults.
+- China edition: `app.wowforever.xmfold.cn`, launcher name **wowforever-xmfold 国服**. It installs alongside the international edition, uses a Chinese launcher and Simplified Chinese game text/audio, and is fixed to China services. Its default game folder is `/storage/emulated/0/WoW Forever China/`; settings, browser login data and the Wine environment are private to this app.
+- Target device: Xiaomi 18 Fold (`2608BPX34C`, `lhasa`), XRING O3, Mali-G2-Ultra-NX MC16, Android 17 / HyperOS 4, 4 KB memory pages.
+- Non-Adreno GPUs use the system Vulkan driver with `Wrapper-gamenative`, a 720p render budget fitted to the current screen, and a 4 GB graphics-memory reporting limit. Native BC textures are preferred, with automatic emulation when required.
+- The Mali configuration builds on [TLT-ghost's Mali support](https://github.com/TLT-ghost/wow-forever-android/tree/mali-support). Existing Adreno profiles remain available.
+- System Vulkan disables the wrapper's OpConstantComposite shader pass, following the [Mali startup workaround](https://github.com/andrehafner/Wow). Debug builds collect Wine exception and DXVK diagnostics in private app storage.
+- Upstream APK update checks are disabled for this edition. Blizzard game-content updates still work.
+- Existing game files in `/storage/emulated/0/WoW Forever/` can be reused. The app may update the shared game configuration when launched.
+- **China** is available in Region. It uses the China metadata service and NetEase CDN and verifies the China ARM64 client before switching an existing installation. **Sign in & Play** opens the official Battle.net China web flow for NetEase mobile verification, then hands a one-use game session to the ARM64 client. International password login is preserved.
+- The APK includes the Bionic filesystem, container template, guest libraries and Mali wrapper. First-time environment setup uses these bundled archives; Blizzard game downloads and account services still need internet access. Interrupted container creation can be retried without reinstalling the app.
+
+Build with JDK 17 and Android SDK platform 36 / build-tools 35.0.0:
+
+```sh
+tools/fetch_components.sh
+tools/wow-session-bridge/build.sh /path/to/aarch64-w64-mingw32-clang app/src/main/assets/wow-session-bridge.exe
+./gradlew :app:assembleModernDebug :app:assembleChinaDebug
+```
+
+The international APK is written to `app/build/outputs/apk/modern/debug/app-modern-debug.apk`; the China APK is `app/build/outputs/apk/china/debug/app-china-debug.apk`. Install either with `adb install -r` using the ADB server connected to your phone. The China edition's first setup downloads the China client into its separate folder when the player presses **下载并安装**. Custom builds use the local debug signing key unless a release keystore is configured; retain that key for future upgrades.
+
+Run one game session at a time when both editions are installed; the bundled Windows input helper uses shared control ports.
+
+Fold/unfold changes preserve the running session and scale the existing render surface. Launch the game on the display you intend to use for a resolution fitted to that display; live game-resolution switching is not implemented.
+
+The Xiaomi user confirmed that **2.4.4-xmfold.7** completes China browser sign-in and enters the game after pressing the on-screen RT button. Both **2.4.4-xmfold.8** editions complete 470 unit tests each with zero failures and two legacy-only skips; tests cover edition isolation, Chinese app resources, China region selection and language defaults. Browser login uses the reviewed ARM64 bridge from upstream `v2.4.4-login4`; simple launch options stay unquoted, following [Scuffle's helper](https://github.com/nyrda/scuffle/blob/bf9a6490490aeb85240ef744b9c0d63be354a00c/bridge/auth_bridge.c). The separate China edition is installed on the Xiaomi, its Chinese setup screen and separate folder were verified, and all six downloaded client files match the official China build 1.60.1.70938 manifest. Its build metadata and game configuration select CN/zhCN for region, text and audio. Account login inside this separately installed package has not yet been confirmed.
+
+## Upstream documentation
+
+The following describes the original Adreno edition. Install this edition's locally built APK rather than the upstream release linked below.
+
+### WoW Forever for Android
 
 Play **World of Warcraft: Forever** on Snapdragon Android handhelds as a normal Android app. You tap the icon, press Play, and the game runs.
 

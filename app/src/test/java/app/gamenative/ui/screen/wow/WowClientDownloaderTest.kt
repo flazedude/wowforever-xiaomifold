@@ -1,9 +1,13 @@
 package app.gamenative.ui.screen.wow
 
+import app.gamenative.BuildConfig
+
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -88,7 +92,8 @@ class WowClientDownloaderTest {
         assertEquals("f0fcf03baf658e38f2f6c96a77798a2c", row["CDN Key"])
         assertEquals("level3.blizzard.com us.cdn.blizzard.com", row["CDN Hosts"])
         assertEquals("http://level3.blizzard.com/?maxhosts=8 https://us.cdn.blizzard.com/?maxhosts=4&fallback=1", row["CDN Servers"])
-        assertEquals("Windows arm64 EU? enUS speech?:Windows arm64 EU? enUS text?", row["Tags"])
+        val locale = if (BuildConfig.CHINA_EDITION) "zhCN" else "enUS"
+        assertEquals("Windows arm64 EU? $locale speech?:Windows arm64 EU? $locale text?", row["Tags"])
     }
 
     @Test
@@ -99,8 +104,57 @@ class WowClientDownloaderTest {
 
         assertEquals("70862", WowClientDownloader.regionRow(rows, "Region", "kr")?.get("BuildId"))
         assertEquals("eu", WowClientDownloader.regionRow(rows, "Region", "EU")?.get("Region"))
-        assertEquals("us", WowClientDownloader.regionRow(rows, "Region", "cn")?.get("Region"))
+        assertNull(WowClientDownloader.regionRow(rows, "Region", "cn"))
         assertNull(WowClientDownloader.regionRow(emptyList(), "Region", "us"))
+    }
+
+    @Test
+    fun regionRow_selectsChinaWithoutFallingBackToGlobalMetadata() {
+        val rows = listOf(mapOf("Region" to "us", "BuildId" to "70959"), mapOf("Region" to "cn", "BuildId" to "70938"))
+        assertEquals("70938", WowClientDownloader.regionRow(rows, "Region", "CN")?.get("BuildId"))
+        assertNull(WowClientDownloader.regionRow(rows.take(1), "Region", "cn"))
+        assertNull(WowClientDownloader.regionRow(listOf(mapOf("Name" to "us")), "Name", "cn"))
+    }
+
+    @Test
+    fun chinaClient_requiresVerificationWhenSwitchingAnExistingGlobalInstall() {
+        assertTrue(WowClientDownloader.regionClientRequired("eu", "cn"))
+        assertTrue(WowClientDownloader.regionClientRequired(null, "cn"))
+        assertFalse(WowClientDownloader.regionClientRequired("CN", "cn"))
+        assertFalse(WowClientDownloader.regionClientRequired("eu", "us"))
+    }
+
+    @Test
+    fun chinaMetadata_usesTheDomesticServiceAndKeepsAnHttpsFallback() {
+        assertEquals(
+            listOf("https://cn.version.battlenet.com.cn/v2/products/wowf", "https://us.version.battle.net/v2/products/wowf"),
+            WowClientDownloader.patchUrls("CN"),
+        )
+        assertEquals(listOf("https://us.version.battle.net/v2/products/wowf"), WowClientDownloader.patchUrls("eu"))
+    }
+
+    @Test
+    fun defaultBranch_mapsChinaWithoutChangingOtherRegions() {
+        assertEquals("cn", WowClientDownloader.defaultBranch("CN"))
+        assertEquals("tw", WowClientDownloader.defaultBranch("HK"))
+        assertEquals("eu", WowClientDownloader.defaultBranch("GB"))
+        assertEquals("us", WowClientDownloader.defaultBranch("US"))
+    }
+
+    @Test
+    fun upsertBuildInfo_switchesToChinaAndPreservesSharedArchives() {
+        val root = tempFolder.newFolder("switch_cn")
+        val buildInfo = File(root, ".build.info")
+        val archive = File(root, "Data/data/data.000").apply { parentFile!!.mkdirs(); writeText("existing shared data") }
+        WowClientDownloader.upsertBuildInfo(buildInfo, TARGET.copy(region = "eu"))
+
+        WowClientDownloader.upsertBuildInfo(buildInfo, TARGET.copy(region = "cn"))
+
+        val row = WowClientDownloader.readBuildInfo(buildInfo)!!
+        assertEquals("cn", row["Branch"])
+        val locale = if (BuildConfig.CHINA_EDITION) "zhCN" else "enUS"
+        assertEquals("Windows arm64 CN? $locale speech?:Windows arm64 CN? $locale text?", row["Tags"])
+        assertEquals("existing shared data", archive.readText())
     }
 
     @Test
@@ -112,7 +166,22 @@ class WowClientDownloaderTest {
 
         val row = WowClientDownloader.readBuildInfo(buildInfo)!!
         assertEquals("kr", row["Branch"])
-        assertEquals("Windows arm64 KR? enUS speech?:Windows arm64 KR? enUS text?", row["Tags"])
+        val locale = if (BuildConfig.CHINA_EDITION) "zhCN" else "enUS"
+        assertEquals("Windows arm64 KR? $locale speech?:Windows arm64 KR? $locale text?", row["Tags"])
+    }
+
+    @Test
+    fun upsertBuildInfo_preservesAnExistingLanguageWhenChangingRegions() {
+        val buildInfo = File(tempFolder.newFolder("existing_language"), ".build.info")
+        buildInfo.writeText(
+            "Branch!STRING:0|Product!STRING:0|Tags!STRING:0\n" +
+                "us|wowf|Windows arm64 US? frFR speech?:Windows arm64 US? frFR text?\n",
+        )
+
+        WowClientDownloader.upsertBuildInfo(buildInfo, TARGET.copy(region = "cn"))
+
+        val row = WowClientDownloader.readBuildInfo(buildInfo)!!
+        assertEquals("Windows arm64 CN? frFR speech?:Windows arm64 CN? frFR text?", row["Tags"])
     }
 
     @Test
@@ -125,7 +194,8 @@ class WowClientDownloaderTest {
         val row = WowClientDownloader.readBuildInfo(buildInfo)!!
         assertEquals(2, buildInfo.readLines().size)
         assertEquals("kr", row["Branch"])
-        assertEquals("Windows arm64 KR? enUS speech?:Windows arm64 KR? enUS text?", row["Tags"])
+        val locale = if (BuildConfig.CHINA_EDITION) "zhCN" else "enUS"
+        assertEquals("Windows arm64 KR? $locale speech?:Windows arm64 KR? $locale text?", row["Tags"])
     }
 
     @Test

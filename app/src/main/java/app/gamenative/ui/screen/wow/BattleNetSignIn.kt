@@ -37,27 +37,30 @@ import java.util.concurrent.atomic.AtomicLong
 object BattleNetSignIn {
     data class Login(val email: String, val password: String)
 
-    fun load(context: Context): Login? {
-        val prefs = prefs(context)
+    fun load(context: Context, region: GameRegion): Login? {
+        val prefs = prefs(context, region)
         val email = prefs.getString(KEY_EMAIL, null) ?: return null
         val sealed = prefs.getString(KEY_PASSWORD, null) ?: return null
         return try {
             Login(email, String(Crypto.decrypt(Base64.decode(sealed, Base64.NO_WRAP))))
         } catch (e: Exception) {
             Timber.w(e, "Saved Battle.net login unreadable, clearing it")
-            forget(context)
+            forget(context, region)
             null
         }
     }
 
-    fun save(context: Context, login: Login) {
+    fun save(context: Context, login: Login, region: GameRegion) {
         val sealed = Base64.encodeToString(Crypto.encrypt(login.password.toByteArray()), Base64.NO_WRAP)
-        prefs(context).edit().putString(KEY_EMAIL, login.email).putString(KEY_PASSWORD, sealed).apply()
+        prefs(context, region).edit().putString(KEY_EMAIL, login.email).putString(KEY_PASSWORD, sealed).apply()
     }
 
-    fun forget(context: Context) {
-        prefs(context).edit().clear().apply()
+    fun forget(context: Context, region: GameRegion, gameRoot: File? = null) {
+        prefs(context, region).edit().clear().apply()
+        gameRoot?.let(::removeLoginFile)
     }
+
+    fun accountLabel(region: GameRegion): String = if (region == GameRegion.CN) "China / NetEase" else "Battle.net"
 
     fun writeLoginFile(gameRoot: File, login: Login) {
         try {
@@ -119,9 +122,13 @@ object BattleNetSignIn {
         }
     }
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    // Retain the original global store so existing international logins survive this update.
+    // China has a separate account service and must never fall back to those credentials.
+    private fun prefs(context: Context, region: GameRegion) =
+        context.getSharedPreferences(if (region == GameRegion.CN) CHINA_PREFS else PREFS, Context.MODE_PRIVATE)
 
     private const val PREFS = "battle_net_login"
+    private const val CHINA_PREFS = "battle_net_login_cn"
     private const val KEY_EMAIL = "email"
     private const val KEY_PASSWORD = "password"
     private const val LOGIN_FILE = "login.txt"
@@ -129,11 +136,12 @@ object BattleNetSignIn {
 
 @Composable
 fun BattleNetCredentialDialog(
+    region: GameRegion,
     onDismiss: () -> Unit,
     onConfirm: (BattleNetSignIn.Login) -> Unit,
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email by remember(region) { mutableStateOf("") }
+    var password by remember(region) { mutableStateOf("") }
     val emailFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -143,18 +151,25 @@ fun BattleNetCredentialDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Battle.net login") },
+        title = { Text("${BattleNetSignIn.accountLabel(region)} login") },
         text = {
             Column {
-                Text("Saved encrypted on this device. WoW will automatically log in on launch.")
+                Text(
+                    if (region == GameRegion.CN) {
+                        "Use the NetEase account linked to your China game account. Saved separately and encrypted on this device. " +
+                            "The game may request additional verification."
+                    } else {
+                        "Saved encrypted on this device. WoW will automatically log in on launch."
+                    },
+                )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text("Email") },
+                    label = { Text(if (region == GameRegion.CN) "NetEase account" else "Email") },
                     singleLine = true,
                     modifier = Modifier.focusRequester(emailFocus),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    keyboardOptions = KeyboardOptions(keyboardType = if (region == GameRegion.CN) KeyboardType.Text else KeyboardType.Email),
                 )
                 OutlinedTextField(
                     value = password,

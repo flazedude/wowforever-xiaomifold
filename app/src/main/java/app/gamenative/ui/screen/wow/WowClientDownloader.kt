@@ -1,5 +1,6 @@
 package app.gamenative.ui.screen.wow
 
+import app.gamenative.BuildConfig
 import app.gamenative.utils.Net
 import okhttp3.Request
 import java.io.ByteArrayOutputStream
@@ -32,6 +33,7 @@ object WowClientDownloader {
     private const val EXCLUDED_ARCH = "x86_64"
     // Lists every region's build, like the plain-HTTP patch server on port 1119 it replaces.
     private const val PATCH_URL = "https://us.version.battle.net/v2/products/$TARGET_PRODUCT"
+    private const val CHINA_PATCH_URL = "https://cn.version.battlenet.com.cn/v2/products/$TARGET_PRODUCT"
     private const val DEFAULT_CDN_PATH = "tpr/wow"
     private val DEFAULT_CDN_HOSTS = listOf("level3.blizzard.com", "us.cdn.blizzard.com")
     private const val INDEX_DOWNLOAD_THREADS = 8
@@ -92,14 +94,20 @@ object WowClientDownloader {
         }
 
         val remote = fetchRemote(region, row) ?: return null
-        val isOutdated = localVersion != remote.remoteVersion ||
+        val isOutdated = regionClientRequired(row["Branch"], region) || localVersion != remote.remoteVersion ||
             (remote.remoteBuildConfig.isNotBlank() && localBuildKey != remote.remoteBuildConfig)
         Timber.i("checkVersion: localVersion=$localVersion, remoteVersion=${remote.remoteVersion}, isOutdated=$isOutdated")
         return remote.copy(localVersion = localVersion, isOutdated = isOutdated)
     }
 
-    private fun fetchRemote(region: String, localRow: Map<String, String>? = null): VersionCheckResult? {
-        val versions = runCatching { fetchText("$PATCH_URL/versions") }.getOrElse {
+    private fun fetchRemote(region: String, localRow: Map<String, String>? = null): VersionCheckResult? =
+        patchUrls(region).firstNotNullOfOrNull { fetchRemoteFrom(it, region, localRow) }
+
+    internal fun patchUrls(region: String): List<String> =
+        if (region.equals("cn", ignoreCase = true)) listOf(CHINA_PATCH_URL, PATCH_URL) else listOf(PATCH_URL)
+
+    private fun fetchRemoteFrom(patchUrl: String, region: String, localRow: Map<String, String>?): VersionCheckResult? {
+        val versions = runCatching { fetchText("$patchUrl/versions") }.getOrElse {
             Timber.w(it, "fetchRemote: http call failed")
             return null
         } ?: run {
@@ -117,8 +125,13 @@ object WowClientDownloader {
                 return null
             }
 
-        val cdns = runCatching { fetchText("$PATCH_URL/cdns") }.getOrNull()?.let(::parsePsv).orEmpty()
+        val cdns = runCatching { fetchText("$patchUrl/cdns") }.getOrNull()?.let(::parsePsv).orEmpty()
         val cdnsRow = regionRow(cdns, "Name", region)
+        // China has its own NetEase CDN. An old global install must not supply its CDN settings when that row is missing.
+        if (region.equals("cn", ignoreCase = true) && cdnsRow?.get("Hosts").isNullOrBlank()) {
+            Timber.w("fetchRemote: no China CDN row from $patchUrl")
+            return null
+        }
 
         return VersionCheckResult(
             localVersion = "",
@@ -136,8 +149,10 @@ object WowClientDownloader {
     // Realms only accept their own region's build, which can lag behind or run ahead of the US one after a patch.
     internal fun regionRow(rows: List<Map<String, String>>, column: String, region: String): Map<String, String>? =
         rows.firstOrNull { it[column].equals(region, ignoreCase = true) }
-            ?: rows.firstOrNull { it[column].equals("us", ignoreCase = true) }
-            ?: rows.firstOrNull()
+
+    // A copied EU/global client can share China's build, but must be verified against China's manifest and CDN first.
+    internal fun regionClientRequired(installedBranch: String?, region: String): Boolean =
+        region.equals("cn", ignoreCase = true) && !installedBranch.equals("cn", ignoreCase = true)
 
     /**
      * Sets up the full-release client in [gameRoot]: an empty folder for a new install, or a beta install that is upgraded
@@ -194,6 +209,9 @@ object WowClientDownloader {
         check(row["Product"] == TARGET_PRODUCT) { "Incompatible game product: ${row["Product"]}. Expected $TARGET_PRODUCT." }
         val latest = checkVersion(gameRoot, region)
         if (latest != null && latest.remoteBuildConfig.isNotBlank()) return updateGame(gameRoot, latest, onStatus)
+        check(!regionClientRequired(row["Branch"], region)) {
+            "Couldn't verify the China client build. Check your connection and update the game for China before launching."
+        }
 
         val cdn = Cdn(
             servers = httpsServers(row["CDN Servers"].orEmpty().let(::splitHosts), row["CDN Hosts"].orEmpty().let(::splitHosts)),
@@ -323,14 +341,16 @@ object WowClientDownloader {
     private fun regionColumns(branch: String, tags: String?): Map<String, String> {
         val region = branch.uppercase(Locale.ROOT)
         val regionTags = tags?.takeIf { it.isNotBlank() }?.replace(REGION_TAG, "$region?")
-            ?: listOf("speech", "text").joinToString(":") { "Windows $PLATFORM_ARCH $region? enUS $it?" }
+            ?: listOf("speech" to BuildConfig.DEFAULT_GAME_AUDIO_LOCALE, "text" to BuildConfig.DEFAULT_GAME_TEXT_LOCALE)
+                .joinToString(":") { (kind, locale) -> "Windows $PLATFORM_ARCH $region? $locale $kind?" }
         return mapOf("Branch" to branch, "Tags" to regionTags)
     }
 
     private val REGION_TAG = Regex("""\b[A-Z]{2}\?""")
 
     // Best guess at the region the Battle.net app would record, for installs that have no beta row to copy it from.
-    internal fun defaultBranch() = when (Locale.getDefault().country.uppercase(Locale.ROOT)) {
+    internal fun defaultBranch(country: String = Locale.getDefault().country) = when (country.uppercase(Locale.ROOT)) {
+        "CN" -> "cn"
         "KR" -> "kr"
         "TW", "HK" -> "tw"
         in EU_COUNTRIES -> "eu"

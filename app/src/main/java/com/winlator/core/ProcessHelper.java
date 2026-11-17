@@ -317,15 +317,17 @@ public abstract class ProcessHelper {
             pid = pidField.getInt(process);
             pidField.setAccessible(false);
 
-            if (!debugCallbacks.isEmpty()) {
+            if (BuildConfig.DEBUG) {
+                createDebugThread(process.getInputStream(), "STDOUT", pid);
+                createDebugThread(process.getErrorStream(), "STDERR", pid);
+            } else {
+                // Drain both pipes even without a callback so guest output cannot fill a pipe
+                // and stall Wine. Release builds still discard output unless a callback records it.
                 createDebugThread(process.getInputStream());
                 createDebugThread(process.getErrorStream());
             }
-//            Uncomment the following lines to see logs from wine
-//            createDebugThread(process.getInputStream(), "STDOUT", pid);
-//            createDebugThread(process.getErrorStream(), "STDERR", pid);
 
-            if (terminationCallback != null) createWaitForThread(process, terminationCallback);
+            if (terminationCallback != null) createWaitForThread(process, pid, terminationCallback);
         }
         catch (Exception e) {
             Log.e("ProcessHelper", "Failed to execute command: " + e);
@@ -462,12 +464,13 @@ public abstract class ProcessHelper {
     }
 
 
-    private static void createWaitForThread(java.lang.Process process, final Callback<Integer> terminationCallback) {
+    private static void createWaitForThread(java.lang.Process process, final int pid, final Callback<Integer> terminationCallback) {
         Executors.newSingleThreadExecutor().execute(new Runnable() {
             @Override
             public void run() {
                 try {
                     int status = process.waitFor();
+                    Log.i("ProcessHelper", "Process " + pid + " exited with status " + status);
                     terminationCallback.call(status);
                 }
                 catch (InterruptedException e) {

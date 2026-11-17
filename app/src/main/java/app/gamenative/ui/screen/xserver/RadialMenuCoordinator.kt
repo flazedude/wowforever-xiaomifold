@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.PointF
 import android.graphics.drawable.ColorDrawable
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -107,6 +108,10 @@ class RadialMenuCoordinator(
     }
 
     fun detach() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            PluviaApp.runOnMainThread { detach() }
+            return
+        }
         close(commit = false)
         cancelBindingDispatches()
         inputControlsView?.setRadialMenuListener(null)

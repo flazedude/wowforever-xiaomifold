@@ -59,35 +59,17 @@ object GraphicsDriverDownloader {
             return@withContext null
         }
 
-        // Modern variant: download from server
-        // Check if already downloaded and cached
-
         // Use the actual filename from manifest (handles .tar.xz case)
         val destFile = File(context.filesDir, "$GRAPHICS_DRIVER_CACHE_DIR/${component.name}")
-        if (destFile.exists() && destFile.length() > 0) {
-            Timber.d("Using cached graphics driver: $componentId at ${destFile.absolutePath}")
-            return@withContext destFile
-        }
-
-        // Download from server using local manifest
-        Timber.i("Downloading graphics driver: $componentId from server")
-
-        destFile.parentFile?.mkdirs()
-
-        try {
+        RuntimeComponentCache.ensureAvailable(context, component.name, destFile, onProgress) {
+            Timber.i("Downloading graphics driver: $componentId from server")
             Net.fetchFileWithFallback(
                 fileName = "graphics_driver/${component.name}",
                 dest = destFile,
                 onProgress = onProgress
             )
             Timber.i("Successfully downloaded graphics driver: $componentId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to download graphics driver: $componentId")
-            destFile.delete()
-            throw e
         }
-
-        return@withContext destFile
     }
 
     /**

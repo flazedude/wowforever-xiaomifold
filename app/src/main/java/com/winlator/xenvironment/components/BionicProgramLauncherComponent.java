@@ -386,6 +386,21 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             envVars.putAll(this.envVars);
         }
 
+        if (BuildConfig.DEBUG && (BuildConfig.APPLICATION_ID.equals("app.wowforever.xmfold")
+                || BuildConfig.APPLICATION_ID.equals("app.wowforever.xmfold.cn"))) {
+            // Keep diagnostics limited to errors/exceptions; network/authentication trace channels
+            // are deliberately excluded. DXVK writes its device/shader diagnostics in private storage.
+            if (envVars.get("WINEDEBUG").equals("-all")) {
+                envVars.put("WINEDEBUG", "-all,err+all,warn+seh");
+            }
+            envVars.put("DXVK_LOG_LEVEL", "info");
+            File runtimeLogs = new File(context.getFilesDir(), "runtime_logs");
+            if (runtimeLogs.isDirectory() || runtimeLogs.mkdirs()) {
+                envVars.put("DXVK_LOG_PATH", runtimeLogs.getAbsolutePath());
+            }
+            Log.i("BionicProgramLauncherComponent", "Runtime diagnostics enabled: Wine errors/SEH and DXVK info");
+        }
+
         if (BuildConfig.XR_BUILD) {
             String shimPath = context.getApplicationInfo().nativeLibraryDir + "/libkgslshim.so";
             if (new File(shimPath).exists()) {
@@ -437,6 +452,8 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         }
 
         return ProcessHelper.exec(command, envVars.toStringArray(), workingDir != null ? workingDir : rootDir, (status) -> {
+            Log.i("BionicProgramLauncherComponent", "Wine launcher exited with status " + status
+                + "; remaining Wine processes: " + ProcessHelper.listRunningWineProcesses());
             synchronized (lock) {
                 pid = -1;
             }

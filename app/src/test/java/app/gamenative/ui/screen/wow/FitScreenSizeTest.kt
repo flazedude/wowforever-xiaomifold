@@ -16,6 +16,12 @@ class FitScreenSizeTest {
     }
 
     @Test
+    fun xiaomi18Fold_measuredInnerDisplay_uses720pPixelBudget() {
+        assertEquals("1142x808", fitScreenSize("1280x720", 1672, 2364))
+        assertEquals("1142x808", fitScreenSize("1280x720", 2364, 1672))
+    }
+
+    @Test
     fun portraitWindow_usesLandscapeAspect() {
         assertEquals("1104x834", fitScreenSize("1280x720", 1848, 2448))
     }

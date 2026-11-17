@@ -14,7 +14,12 @@ import org.json.JSONObject
 import timber.log.Timber
 
 object AppUpdater {
+    private const val UPSTREAM_APPLICATION_ID = "app.wowforever"
     private const val RELEASES_URL = "https://api.github.com/repos/jaredgei/wow-forever-android/releases/latest"
+
+    // Upstream APKs use another package/signing identity and omit this fork's device fixes.
+    val isEnabled: Boolean
+        get() = BuildConfig.APPLICATION_ID == UPSTREAM_APPLICATION_ID
 
     data class Release(
         val version: String,
@@ -66,6 +71,7 @@ object AppUpdater {
     }.getOrNull()
 
     suspend fun check(currentVersion: String = BuildConfig.VERSION_NAME): Release? = withContext(Dispatchers.IO) {
+        if (!isEnabled) return@withContext null
         runCatching {
             val request = Request.Builder()
                 .url(RELEASES_URL)
@@ -88,6 +94,7 @@ object AppUpdater {
         release: Release,
         onProgress: (Float) -> Unit,
     ): File = withContext(Dispatchers.IO) {
+        kotlin.check(isEnabled && context.packageName == UPSTREAM_APPLICATION_ID) { "Upstream APK updates are disabled for this build." }
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         val dest = File(dir, "WoW-Forever-${release.version}.apk")
         if (dest.exists() && dest.length() == release.sizeBytes && release.sizeBytes > 0) {
@@ -99,13 +106,14 @@ object AppUpdater {
     }
 
     fun canInstall(context: Context): Boolean = runCatching {
-        context.packageManager.canRequestPackageInstalls()
+        isEnabled && context.packageName == UPSTREAM_APPLICATION_ID && context.packageManager.canRequestPackageInstalls()
     }.getOrElse {
         Timber.w(it, "canRequestPackageInstalls check failed")
         false
     }
 
     fun openInstallPermissionSettings(context: Context) {
+        if (!isEnabled || context.packageName != UPSTREAM_APPLICATION_ID) return
         runCatching {
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
@@ -125,6 +133,7 @@ object AppUpdater {
     }
 
     fun install(context: Context, apkFile: File) {
+        kotlin.check(isEnabled && context.packageName == UPSTREAM_APPLICATION_ID) { "Upstream APK updates are disabled for this build." }
         if (!canInstall(context)) {
             openInstallPermissionSettings(context)
             return

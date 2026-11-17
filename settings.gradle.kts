@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "wow-forever-android"
+rootProject.name = "wowforever-xmfold"
 include(":app")

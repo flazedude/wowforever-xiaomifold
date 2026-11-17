@@ -2,6 +2,8 @@ package app.gamenative
 
 import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.StrictMode
 import android.util.DisplayMetrics
 import android.view.Display
@@ -11,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavController
 import app.gamenative.events.EventDispatcher
 import app.gamenative.ui.screen.xserver.RadialMenuCoordinator
+import app.gamenative.utils.ChineseAppLocale
 import android.app.Application
 import com.winlator.container.Container
 import com.winlator.inputcontrols.InputControlsManager
@@ -33,6 +36,7 @@ class PluviaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ChineseAppLocale.applyApplicationLocale(this)
         instance = this
         android.system.Os.setenv("EVSHIM_BASE_PATH", filesDir.absolutePath, true)
 
@@ -89,6 +93,10 @@ class PluviaApp : Application() {
          * MainActivity.onDestroy fallback so both paths clean up identically
          */
         fun shutdownEnvironment() {
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                runOnMainThread { shutdownEnvironment() }
+                return
+            }
             val env = xEnvironment
             Timber.i("shutdownEnvironment: env=%s", env != null)
 
@@ -109,6 +117,14 @@ class PluviaApp : Application() {
             keepAlive = false
             clearActiveSuspendState()
             GameSessionService.stop(instance)
+        }
+
+        internal fun runOnMainThread(action: () -> Unit) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                action()
+            } else {
+                Handler(Looper.getMainLooper()).post { action() }
+            }
         }
 
         fun clearActiveSuspendState() {

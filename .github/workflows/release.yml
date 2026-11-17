@@ -16,10 +16,10 @@ on:
         required: true
         default: main
       tag:
-        description: Release tag to create, e.g. v2.4.2 or v2.4.1-test1
+        description: Release tag to create, e.g. v2.4.4-xmfold.1
         required: true
       title:
-        description: Release title (defaults to "WoW Forever for Android <tag>")
+        description: Release title (defaults to "wowforever-xmfold <tag>")
         required: false
       notes:
         description: Release notes (Markdown)
@@ -114,15 +114,18 @@ jobs:
             echo "keyPassword=$KEY_PASSWORD"
           } > app/keystores/keystore.properties
 
-      - name: Build
-        run: ./gradlew --no-daemon :app:assembleModernRelease
+      - name: Build both editions
+        run: ./gradlew --no-daemon :app:assembleModernRelease :app:assembleChinaRelease
 
       - name: Verify the signature
         run: |
-          apk=app/build/outputs/apk/modern/release/app-modern-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk" | tee certs.txt
-          if grep -q "CN=Android Debug" certs.txt; then echo "::error::APK is debug-signed"; exit 1; fi
-          cp "$apk" WoW-Forever.apk
+          for variant in modern china; do
+            apk="app/build/outputs/apk/$variant/release/app-$variant-release.apk"
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk" | tee "certs-$variant.txt"
+            if grep -q "CN=Android Debug" "certs-$variant.txt"; then echo "::error::APK is debug-signed"; exit 1; fi
+          done
+          cp app/build/outputs/apk/modern/release/app-modern-release.apk wowforever-xmfold.apk
+          cp app/build/outputs/apk/china/release/app-china-release.apk wowforever-xmfold-cn.apk
 
       - name: Remove signing files
         if: always()
@@ -139,8 +142,8 @@ jobs:
           sha=$(git rev-parse HEAD)
           flags=()
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
-          gh release create "$TAG" WoW-Forever.apk \
+          gh release create "$TAG" wowforever-xmfold.apk wowforever-xmfold-cn.apk \
             --target "$sha" \
-            --title "${TITLE:-WoW Forever for Android $TAG}" \
+            --title "${TITLE:-wowforever-xmfold $TAG}" \
             --notes "${NOTES:-}" \
             "${flags[@]}"

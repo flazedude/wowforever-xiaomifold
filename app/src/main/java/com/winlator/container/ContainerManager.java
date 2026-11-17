@@ -114,11 +114,15 @@ public class ContainerManager {
     }
 
     public Container createContainer(String containerId, JSONObject data) {
+        File containerDir = new File(homeDir, ImageFs.USER+"-"+containerId);
+        boolean createdDirectory = false;
+        boolean completed = false;
         try {
             data.put("id", containerId);
 
-            File containerDir = new File(homeDir, ImageFs.USER+"-"+containerId);
-            if (!containerDir.mkdirs()) return null;
+            boolean directoryExisted = containerDir.exists();
+            if (!prepareContainerDirectory(containerDir)) return null;
+            createdDirectory = !directoryExisted;
 
             Container container = new Container(containerId);
             container.setRootDir(containerDir);
@@ -132,17 +136,31 @@ public class ContainerManager {
             if (!thin && !extractContainerPatternFile(container.getWineVersion(), contentsManager, containerDir, null)) {
                 Log.w("Container Manager", "Failed to extract container pattern, deleting container directory...");
                 FileUtils.delete(containerDir);
-                return null;
+                throw new IllegalStateException("Couldn't extract the Windows environment for " + container.getWineVersion() + ". Check the runtime archives and retry setup.");
             }
 
             container.saveData();
+            if (!container.getConfigFile().isFile() || container.getConfigFile().length() == 0) {
+                throw new IllegalStateException("Couldn't save the Windows environment settings. Check internal storage and retry setup.");
+            }
             containers.add(container);
+            completed = true;
             return container;
         }
         catch (JSONException e) {
             Log.e("ContainerManager", "Failed to create container: " + e);
+            throw new IllegalStateException("Couldn't configure the Windows environment: " + e.getMessage(), e);
         }
-        return null;
+        finally {
+            if (createdDirectory && !completed) FileUtils.delete(containerDir);
+        }
+    }
+
+    static boolean prepareContainerDirectory(File directory) {
+        if (!directory.exists()) return directory.mkdirs();
+        // An interrupted first setup can leave a directory that loadContainers skips because
+        // no configuration was ever saved. Reuse its files on retry, preserving saved containers.
+        return directory.isDirectory() && !new File(directory, ".container").exists();
     }
 
     private boolean createThinPrefix(Container container, ContentsManager contentsManager) {

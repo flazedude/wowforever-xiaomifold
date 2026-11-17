@@ -38,15 +38,19 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.wowforever"
+        applicationId = "app.wowforever.xmfold"
 
         minSdk = 26
 
         manifestPlaceholders["screenOrientation"] = "unspecified"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
         buildConfigField("boolean", "XR_BUILD", "false")
+        buildConfigField("boolean", "CHINA_EDITION", "false")
+        buildConfigField("String", "DEFAULT_GAME_TEXT_LOCALE", "\"enUS\"")
+        buildConfigField("String", "DEFAULT_GAME_AUDIO_LOCALE", "\"enUS\"")
 
-        versionCode = 245
-        versionName = "2.4.4"
+        versionCode = 252
+        versionName = "2.4.4-xmfold.8"
 
         buildConfigField("boolean", "GOLD", "false")
         val iconValue = "@mipmap/ic_launcher"
@@ -102,6 +106,20 @@ android {
             targetSdk = 36
             ndk.abiFilters += listOf("arm64-v8a")
             buildConfigField("boolean", "MODERN_ANDROID", "true")
+            buildConfigField("String", "PRELOAD_BIONIC_SO", "\"libredirect-bionic-wx.so\"")
+        }
+        create("china") {
+            dimension = "androidApi"
+            applicationIdSuffix = ".cn"
+            versionNameSuffix = "-cn"
+            minSdk = 29
+            targetSdk = 36
+            ndk.abiFilters += listOf("arm64-v8a")
+            manifestPlaceholders["appLabel"] = "wowforever-xmfold 国服"
+            buildConfigField("boolean", "MODERN_ANDROID", "true")
+            buildConfigField("boolean", "CHINA_EDITION", "true")
+            buildConfigField("String", "DEFAULT_GAME_TEXT_LOCALE", "\"zhCN\"")
+            buildConfigField("String", "DEFAULT_GAME_AUDIO_LOCALE", "\"zhCN\"")
             buildConfigField("String", "PRELOAD_BIONIC_SO", "\"libredirect-bionic-wx.so\"")
         }
     }
@@ -170,6 +188,13 @@ android {
             assets {
                 srcDirs("src/modern/assets", "src/main/assets")
             }
+        }
+        getByName("china") {
+            assets.srcDirs("src/modern/assets", "src/main/assets")
+            jniLibs.srcDir("src/modern/jniLibs")
+        }
+        getByName("testChina") {
+            resources.srcDir("src/testModern/resources")
         }
     }
 

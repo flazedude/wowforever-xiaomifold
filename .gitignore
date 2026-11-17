@@ -75,6 +75,7 @@ app/src/main/cpp/third_party/SDL2/
 
 # Large runtime components, fetched by tools/fetch_components.sh
 app/src/main/assets/bundled_components/
+app/src/main/assets/imagefs_bionic.txz
 
 # Blizzard client files never belong in this repo
 WowB-ARM64/

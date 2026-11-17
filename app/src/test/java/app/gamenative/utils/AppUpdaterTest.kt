@@ -1,13 +1,42 @@
 package app.gamenative.utils
 
+import android.content.Context
+import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito.verifyNoInteractions
+import org.mockito.kotlin.mock
 
 class AppUpdaterTest {
+
+    @Test
+    fun customBuild_rejectsUpstreamDownloadBeforeAccessingStorage() {
+        val context = mock<Context>()
+        val release = AppUpdater.Release("999.0.0", "Upstream", "", "https://example.com/upstream.apk", 1L)
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { AppUpdater.download(context, release) {} }
+        }
+
+        verifyNoInteractions(context)
+    }
+
+    @Test
+    fun customBuild_rejectsUpstreamInstallationAndPermissionRequest() {
+        val context = mock<Context>()
+
+        assertFalse(AppUpdater.canInstall(context))
+        AppUpdater.openInstallPermissionSettings(context)
+        assertThrows(IllegalStateException::class.java) { AppUpdater.install(context, File("upstream.apk")) }
+
+        verifyNoInteractions(context)
+    }
 
     @Test
     fun isNewer_higherPatch_returnsTrue() {

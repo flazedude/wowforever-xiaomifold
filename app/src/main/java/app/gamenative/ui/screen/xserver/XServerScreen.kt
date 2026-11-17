@@ -24,6 +24,9 @@ import android.view.InputDevice
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import app.gamenative.BuildConfig
+import app.gamenative.ui.screen.wow.GamePath
+import app.gamenative.ui.screen.wow.GameRegion
+import app.gamenative.ui.screen.wow.auth.BattleNetBrowserLogin
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -3656,9 +3659,15 @@ private fun setupXEnvironment(
         val wow64Mode = container.isWoW64Mode
         guestProgramLauncherComponent.setContainer(container)
         guestProgramLauncherComponent.setWineInfo(xServerState.value.wineInfo)
-        val gameExecutable = "wine explorer /desktop=shell," + xServer.screenInfo + " " +
-            getWineStartCommand(context, appId, container, envVars, guestProgramLauncherComponent) +
+        val directCommand = getWineStartCommand(context, appId, container, envVars, guestProgramLauncherComponent) +
             (if (container.execArgs.isNotEmpty()) " " + container.execArgs else "")
+        val launchRegion = GameRegion.current(context, GamePath.load(context))
+        val launchCommand = if (BattleNetBrowserLogin.enabled(context, launchRegion)) {
+            BattleNetBrowserLogin.start(context, container)
+        } else {
+            directCommand
+        }
+        val gameExecutable = "wine explorer /desktop=shell," + xServer.screenInfo + " " + launchCommand
         guestProgramLauncherComponent.guestExecutable = gameExecutable
         guestProgramLauncherComponent.isWoW64Mode = wow64Mode
         // Set steam type for selecting appropriate box64rc
@@ -3696,7 +3705,7 @@ private fun setupXEnvironment(
                 container.saveData()
             }
             if (!isExiting.get()) {
-                PluviaApp.events.emit(AndroidEvent.SetBootingSplashText("Launching game..."))
+                PluviaApp.events.emit(AndroidEvent.SetBootingSplashText(app.gamenative.ui.screen.wow.wowText("Launching game...", "正在启动游戏…")))
             }
         }
 
@@ -3820,6 +3829,7 @@ private fun setupXEnvironment(
     try {
         environment.startEnvironmentComponents()
     } catch (e: Exception) {
+        BattleNetBrowserLogin.cancel()
         Timber.e(e, "Failed to start environment components, cleaning up")
         try {
             environment.stopEnvironmentComponents()
@@ -3916,6 +3926,18 @@ private fun exit(
         Timber.i("Exit already in progress, ignoring duplicate request")
         return
     }
+
+    // Native termination arrives on a process-pool thread. Claim the exit before posting so duplicate callbacks coalesce.
+    PluviaApp.runOnMainThread { finishExit(winHandler, frameRating, container, onExit, navigateBack) }
+}
+
+private fun finishExit(
+    winHandler: WinHandler?,
+    frameRating: FrameRating?,
+    container: Container,
+    onExit: (onComplete: (() -> Unit)?) -> Unit,
+    navigateBack: () -> Unit,
+) {
 
     // Store session data in container metadata
     frameRating?.let { rating ->
@@ -4766,7 +4788,7 @@ private suspend fun extractGraphicsDriverFiles(
             }
         }
 
-        if (adrenoToolsDriverId !== "System") {
+        if (adrenoToolsDriverId != "System") {
             val adrenotoolsManager: AdrenotoolsManager = AdrenotoolsManager(context)
             adrenotoolsManager.setDriverById(envVars, imageFs, adrenoToolsDriverId)
         }

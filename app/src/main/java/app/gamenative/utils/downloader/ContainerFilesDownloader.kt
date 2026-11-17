@@ -81,34 +81,19 @@ object ContainerFilesDownloader {
             return@withContext null
         }
 
-        // Modern variant: download from server
-        // Check if already downloaded and cached
+        // Modern builds can ship first-boot archives in bundled_components so setup works
+        // without reaching the component CDN. Existing extractors still receive a regular File.
         val cacheDir = File(context.filesDir, CONTAINER_FILES_CACHE_DIR)
         val destFile = getCacheFile(cacheDir, component)
-        if (isReusableCacheFile(destFile)) {
-            Timber.d("Using cached container file: $componentId at ${destFile.absolutePath}")
-            return@withContext destFile
-        }
-
-        // Download from server using local manifest
-        Timber.i("Downloading container file: $componentId from server")
-
-        cacheDir.mkdirs()
-
-        try {
+        RuntimeComponentCache.ensureAvailable(context, component.name, destFile, onProgress) {
+            Timber.i("Downloading container file: $componentId from server")
             Net.fetchFileWithFallback(
                 fileName = "container_files/${component.name}",
                 dest = destFile,
                 onProgress = onProgress
             )
             Timber.i("Successfully downloaded container file: $componentId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to download container file: $componentId")
-            destFile.delete()
-            throw e
         }
-
-        return@withContext destFile
     }
 
     /**
